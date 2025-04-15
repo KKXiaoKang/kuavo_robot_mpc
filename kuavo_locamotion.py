@@ -67,6 +67,9 @@ rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
     Received linear acceleration:  [[-4.76259183883667, 1.2977550029754639, -4.7949113845825195]]
     Received angular acceleration:  [[-11.033914566040039, 20.466079711914062, 27.719755172729492]]
 """
+import json
+import os
+
 class KuavoRobotController():
     """
     # 45 - 机器人
@@ -78,10 +81,46 @@ class KuavoRobotController():
         self.robot_sensor_data_pub = rospy.Publisher('/sensors_data_raw', sensorsData, queue_size=10)
         self.robot_joint_cmd_sub = rospy.Subscriber('/joint_cmd', jointCmd, self.joint_cmd_callback)
 
+        # Load joint configurations from JSON file
+        config_path = os.path.join(os.path.dirname(__file__), "config", "joint_name.json")
+        try:
+            with open(config_path, 'r') as f:
+                joint_config = json.load(f)
+                self.arm_joints = joint_config["arm_joints"]
+                self.leg_joints = joint_config["leg_joints"]
+                self.head_joints = joint_config["head_joints"]
+        except Exception as e:
+            print(f"Error loading joint configuration: {e}")
+            # Fallback to default values if JSON loading fails
+            self.arm_joints = []
+            self.leg_joints = []
+            self.head_joints = []
+
+        # Initialize empty indices lists
+        self._arm_idx = []
+        self._leg_idx = []
+        self._head_idx = []
+
+    def setup_joint_indices(self, joint_names):
+        """Setup joint indices based on joint names"""
+        # Find indices for arm joints
+        self._arm_idx = [i for i, name in enumerate(joint_names) if name in self.arm_joints]
+        
+        # Find indices for leg joints
+        self._leg_idx = [i for i, name in enumerate(joint_names) if name in self.leg_joints]
+        
+        # Find indices for head joints
+        self._head_idx = [i for i, name in enumerate(joint_names) if name in self.head_joints]
+
+        if DEBUG_FLAG:
+            print("Arm joint indices:", self._arm_idx)
+            print("Leg joint indices:", self._leg_idx)
+            print("Head joint indices:", self._head_idx)
+
     def joint_cmd_callback(self, joint_cmd):
         pass
 
-    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w):
+    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
@@ -154,6 +193,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
     sim_time = 0.0
     count = 0
 
+    body_names = scene["robot"].data.body_names   # 包含所有fix固定的joint
+    joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
+    robot.setup_joint_indices(joint_names)
+    
     # Simulate physics
     while simulation_app.is_running():
         # Reset every 500 steps
@@ -192,10 +235,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
         # 获取机器人的数据
         joint_pos = scene["robot"].data.joint_pos.tolist()
         joint_vel = scene["robot"].data.joint_vel.tolist()
-        body_names = scene["robot"].data.body_names
 
         if DEBUG_FLAG:
-            print("-------------------------------")
+            # print("-------------------------------")
             # print(scene["imu_base"].data)
             # print("Received linear velocity: ", scene["imu_base"].data.lin_vel_b)
             # print("Received angular velocity: ", scene["imu_base"].data.ang_vel_b)
@@ -207,16 +249,17 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
             # print("Received linear acceleration: ", lin_acc_b)
             # print("Received angular acceleration: ", ang_acc_b)
 
-            print("joint_pos: ", joint_pos)
-            print("joint_vel: ", joint_vel)
-            print("body_names: ", body_names)
-            print("-------------------------------")
+            # print("joint_pos: ", joint_pos)
+            # print("joint_vel: ", joint_vel)
+            # print("body_names: ", body_names)
+            # print("joint_names: ", joint_names)
+            # print("-------------------------------")
+            pass
 
         # 更新传感器数据
-        robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w)
+        robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel)
 
         # TODO: 更新MPC控制器
-        break
 
 def main():
     """Main function."""
