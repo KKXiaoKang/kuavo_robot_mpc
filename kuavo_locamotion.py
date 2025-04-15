@@ -365,6 +365,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             # 将力矩命令转换为tensor并发送给机器人
             torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
             scene["robot"].set_joint_effort_target(torque_tensor)
+            scene["robot"].write_data_to_sim()
 
 def main():
     """Main function."""
