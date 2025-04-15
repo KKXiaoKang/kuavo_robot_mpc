@@ -100,6 +100,7 @@ class KuavoRobotController():
         self._arm_idx = []
         self._leg_idx = []
         self._head_idx = []
+        self._ocs2_idx = []
 
     def setup_joint_indices(self, joint_names):
         """Setup joint indices based on joint names"""
@@ -112,15 +113,19 @@ class KuavoRobotController():
         # Find indices for head joints
         self._head_idx = [i for i, name in enumerate(joint_names) if name in self.head_joints]
 
+        # ocs2 idx 
+        self._ocs2_idx = self._arm_idx + self._leg_idx + self._head_idx
+
         if DEBUG_FLAG:
             print("Arm joint indices:", self._arm_idx)
             print("Leg joint indices:", self._leg_idx)
-            print("Head joint indices:", self._head_idx)
+            print("Head joint indices:", self._head_idx)    
+            print("OCS2 joint indices:", self._ocs2_idx)
 
     def joint_cmd_callback(self, joint_cmd):
         pass
 
-    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel):
+    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
@@ -137,16 +142,29 @@ class KuavoRobotController():
         sensor_data.sensor_time = current_time
 
         # IMU数据
-        sensor_data.imu_data.gyro.x = ang_vel_b[0][0]   # ang_vel
-        sensor_data.imu_data.gyro.y = ang_vel_b[0][1]  # ang_vel
-        sensor_data.imu_data.gyro.z = ang_vel_b[0][2]  # ang_vel
-        sensor_data.imu_data.acc.x = lin_acc_b[0][0]  # lin_acc
-        sensor_data.imu_data.acc.y = lin_acc_b[0][1]  # lin_acc
-        sensor_data.imu_data.acc.z = lin_acc_b[0][2]  # lin_acc
-        sensor_data.imu_data.quat.w = quat_w[0][0]  # 旋转矩阵
-        sensor_data.imu_data.quat.x = quat_w[0][1]  # 旋转矩阵
-        sensor_data.imu_data.quat.y = quat_w[0][2]  # 旋转矩阵
-        sensor_data.imu_data.quat.z = quat_w[0][3]  # 旋转矩阵
+        sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
+        sensor_data.imu_data.gyro.y = ang_vel_b[1]  # ang_vel
+        sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
+        sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
+        sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
+        sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.quat.w = quat_w[0]  # 旋转矩阵
+        sensor_data.imu_data.quat.x = quat_w[1]  # 旋转矩阵
+        sensor_data.imu_data.quat.y = quat_w[2]  # 旋转矩阵
+        sensor_data.imu_data.quat.z = quat_w[3]  # 旋转矩阵
+
+        # 关节数据赋值优化
+        # 初始化数组
+        sensor_data.joint_data.joint_q = [0.0] * 28
+        sensor_data.joint_data.joint_v = [0.0] * 28
+        sensor_data.joint_data.joint_vd = [0.0] * 28
+        sensor_data.joint_data.joint_current = [0.0] * 28
+
+        # 关节数据赋值
+        for i in range(len(self._ocs2_idx)):
+            sensor_data.joint_data.joint_q[i] = joint_pos[self._ocs2_idx[i]]
+            sensor_data.joint_data.joint_v[i] = joint_vel[self._ocs2_idx[i]]
+            sensor_data.joint_data.joint_current[i] = applied_torque[self._ocs2_idx[i]]
 
         # 发布数据
         self.robot_sensor_data_pub.publish(sensor_data)
@@ -226,15 +244,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
         scene.update(sim_dt)
 
         # 获取IMU数据
-        lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
-        ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
-        lin_acc_b = scene["imu_base"].data.lin_acc_b.tolist()  # 线加速度
-        ang_acc_b = scene["imu_base"].data.ang_acc_b.tolist()  # 角加速度
-        quat_w = scene["imu_base"].data.quat_w.tolist()  # 旋转矩阵
+        lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()[0]  # 线速度
+        ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()[0]  # 角速度
+        lin_acc_b = scene["imu_base"].data.lin_acc_b.tolist()[0]  # 线加速度
+        ang_acc_b = scene["imu_base"].data.ang_acc_b.tolist()[0]  # 角加速度
+        quat_w = scene["imu_base"].data.quat_w.tolist()[0]  # 旋转矩阵
 
         # 获取机器人的数据
-        joint_pos = scene["robot"].data.joint_pos.tolist()
-        joint_vel = scene["robot"].data.joint_vel.tolist()
+        joint_pos = scene["robot"].data.joint_pos.tolist()[0]
+        joint_vel = scene["robot"].data.joint_vel.tolist()[0]
+        applied_torque = scene["robot"].data.applied_torque.tolist()[0]
 
         if DEBUG_FLAG:
             # print("-------------------------------")
@@ -253,11 +272,12 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
             # print("joint_vel: ", joint_vel)
             # print("body_names: ", body_names)
             # print("joint_names: ", joint_names)
+            # print("applied_torque: ", applied_torque)
             # print("-------------------------------")
             pass
 
         # 更新传感器数据
-        robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel)
+        robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
 
         # TODO: 更新MPC控制器
 
