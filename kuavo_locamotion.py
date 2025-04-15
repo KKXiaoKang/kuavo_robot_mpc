@@ -210,12 +210,12 @@ class KuavoRobotController():
         sensor_data.sensor_time = current_time
 
         # IMU数据
-        sensor_data.imu_data.gyro.x = -ang_vel_b[0]   # ang_vel
-        sensor_data.imu_data.gyro.y = -ang_vel_b[1]  # ang_vel
-        sensor_data.imu_data.gyro.z = -ang_vel_b[2]  # ang_vel
-        sensor_data.imu_data.acc.x = -lin_acc_b[0]  # lin_acc
-        sensor_data.imu_data.acc.y = -lin_acc_b[1]  # lin_acc
-        sensor_data.imu_data.acc.z = -lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
+        sensor_data.imu_data.gyro.y = ang_vel_b[1]  # ang_vel
+        sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
+        sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
+        sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
+        sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
         sensor_data.imu_data.quat.w = quat_w[0]  # 旋转矩阵
         sensor_data.imu_data.quat.x = quat_w[1]  # 旋转矩阵
         sensor_data.imu_data.quat.y = quat_w[2]  # 旋转矩阵
@@ -354,14 +354,12 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
 
         # TODO: 更新MPC控制器
         joint_cmd = kuavo_robot.joint_cmd
-        print("joint_cmd: ", joint_cmd)
         if joint_cmd is not None:   
             # 创建一个与机器人总关节数相同的零力矩数组
             full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
             
             # 将收到的力矩命令映射到对应的关节索引上
             for i, ocs2_idx in enumerate(kuavo_robot._ocs2_idx):
-                print("--- ocs2_idx: ", ocs2_idx, " ---- i :", i)
                 full_torque_cmd[ocs2_idx] = joint_cmd.tau[i]
         
             # 将力矩命令转换为tensor并发送给机器人
