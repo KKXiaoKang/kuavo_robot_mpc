@@ -244,9 +244,18 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
     robot.setup_joint_indices(joint_names)
     
-    # while not robot.sim_running:
-    #     rospy.sleep(0.1)
-    #     rospy.loginfo("Waiting for simulation start signal...")
+    # 设置机器人初始状态
+    root_state = scene["robot"].data.default_root_state.clone()
+    root_state[:, :3] += scene.env_origins
+    scene["robot"].write_root_pose_to_sim(root_state[:, :7])
+    scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
+    # set joint positions
+    joint_pos = scene["robot"].data.default_joint_pos.clone()
+    joint_vel = scene["robot"].data.default_joint_vel.clone()
+    scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
+    # clear internal buffers
+    scene.reset()
+    print("[INFO]: Setting initial robot state...")
         
     # Simulate physics
     while simulation_app.is_running():
@@ -254,22 +263,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
             rospy.sleep(1)
             rospy.loginfo("Waiting for simulation start signal...")
             continue
-        # Reset every 500 steps
-        if count % 500 == 0:
-            # reset counter
-            count = 0
-            # reset the scene entities
-            root_state = scene["robot"].data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            scene["robot"].write_root_pose_to_sim(root_state[:, :7])
-            scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
-            # set joint positions
-            joint_pos = scene["robot"].data.default_joint_pos.clone()
-            joint_vel = scene["robot"].data.default_joint_vel.clone()
-            scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
-            # clear internal buffers
-            scene.reset()
-            print("[INFO]: Resetting robot state...")
+
         # write data to sim
         scene.write_data_to_sim()
         # perform step
