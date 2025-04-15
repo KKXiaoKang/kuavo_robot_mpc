@@ -69,6 +69,37 @@ rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
     Received linear acceleration:  [[-4.76259183883667, 1.2977550029754639, -4.7949113845825195]]
     Received angular acceleration:  [[-11.033914566040039, 20.466079711914062, 27.719755172729492]]
 """
+"""
+            --- ocs2_idx:  0  ---- i : 0
+            --- ocs2_idx:  1  ---- i : 1
+            --- ocs2_idx:  5  ---- i : 2
+            --- ocs2_idx:  6  ---- i : 3
+            --- ocs2_idx:  10  ---- i : 4
+            --- ocs2_idx:  11  ---- i : 5
+            --- ocs2_idx:  14  ---- i : 6
+            --- ocs2_idx:  15  ---- i : 7
+            --- ocs2_idx:  18  ---- i : 8
+            --- ocs2_idx:  19  ---- i : 9
+            --- ocs2_idx:  22  ---- i : 10
+            --- ocs2_idx:  23  ---- i : 11
+            -- ocs2_idx:  2  ---- i : 12
+            --- ocs2_idx:  3  ---- i : 13
+            --- ocs2_idx:  7  ---- i : 14
+            --- ocs2_idx:  8  ---- i : 15
+            --- ocs2_idx:  12  ---- i : 16
+            --- ocs2_idx:  13  ---- i : 17
+            --- ocs2_idx:  16  ---- i : 18
+            --- ocs2_idx:  17  ---- i : 19
+            --- ocs2_idx:  20  ---- i : 20
+            --- ocs2_idx:  21  ---- i : 21
+            --- ocs2_idx:  24  ---- i : 22
+            --- ocs2_idx:  25  ---- i : 23
+            --- ocs2_idx:  26  ---- i : 24
+            --- ocs2_idx:  27  ---- i : 25
+            --- ocs2_idx:  4  ---- i : 26
+            --- ocs2_idx:  9  ---- i : 27
+"""
+
 import json
 import os
 
@@ -80,6 +111,9 @@ class KuavoRobotController():
     [4, 9] # 头
     """
     def __init__(self):
+        # 添加对scene的引用
+        self.scene = None
+        self.joint_cmd = None
         # state/cmd
         self.robot_sensor_data_pub = rospy.Publisher('/sensors_data_raw', sensorsData, queue_size=10)
         self.robot_joint_cmd_sub = rospy.Subscriber('/joint_cmd', jointCmd, self.joint_cmd_callback)
@@ -143,7 +177,7 @@ class KuavoRobotController():
         self._head_idx = [i for i, name in enumerate(joint_names) if name in self.head_joints]
 
         # ocs2 idx 
-        self._ocs2_idx = self._arm_idx + self._leg_idx + self._head_idx
+        self._ocs2_idx = self._leg_idx + self._arm_idx + self._head_idx # 脚/手/头
 
         if DEBUG_FLAG:
             print("Arm joint indices:", self._arm_idx)
@@ -152,8 +186,13 @@ class KuavoRobotController():
             print("OCS2 joint indices:", self._ocs2_idx)
 
     def joint_cmd_callback(self, joint_cmd):
-        pass
-
+        """处理接收到的关节力矩命令
+        
+        Args:
+            joint_cmd (jointCmd): 包含关节力矩命令的ROS消息
+        """
+        self.joint_cmd = joint_cmd
+        
     def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
@@ -232,8 +271,11 @@ class BipedSceneCfg(InteractiveSceneCfg):
     """
     imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", gravity_bias=(0, 0, 0), debug_vis=True) # 没有消除重力
 
-def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, robot: KuavoRobotController):
+def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kuavo_robot: KuavoRobotController):
     """Run the simulator."""
+    # 设置scene引用
+    kuavo_robot.scene = scene
+    
     # Define simulation stepping
     sim_dt = sim.get_physics_dt()
     print("sim_dt: ", sim_dt)
@@ -242,7 +284,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
 
     body_names = scene["robot"].data.body_names   # 包含所有fix固定的joint
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
-    robot.setup_joint_indices(joint_names)
+    kuavo_robot.setup_joint_indices(joint_names)
     
     # 设置机器人初始状态
     root_state = scene["robot"].data.default_root_state.clone()
@@ -259,7 +301,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
         
     # Simulate physics
     while simulation_app.is_running():
-        if not robot.sim_running:
+        if not kuavo_robot.sim_running:
             rospy.sleep(1)
             rospy.loginfo("Waiting for simulation start signal...")
             continue
@@ -308,9 +350,23 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
             pass
 
         # 更新传感器数据
-        robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
+        kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
 
         # TODO: 更新MPC控制器
+        joint_cmd = kuavo_robot.joint_cmd
+        print("joint_cmd: ", joint_cmd)
+        if joint_cmd is not None:   
+            # 创建一个与机器人总关节数相同的零力矩数组
+            full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
+            
+            # 将收到的力矩命令映射到对应的关节索引上
+            for i, ocs2_idx in enumerate(kuavo_robot._ocs2_idx):
+                print("--- ocs2_idx: ", ocs2_idx, " ---- i :", i)
+                full_torque_cmd[ocs2_idx] = joint_cmd.tau[i]
+        
+            # 将力矩命令转换为tensor并发送给机器人
+            torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
+            scene["robot"].set_joint_effort_target(torque_tensor)
 
 def main():
     """Main function."""
@@ -326,7 +382,7 @@ def main():
     scene = InteractiveScene(scene_cfg)
     
     # 创建机器人控制实例
-    robot = KuavoRobotController()
+    kuavo_robot = KuavoRobotController()
 
     # Reset simulation
     sim.reset()
@@ -335,7 +391,7 @@ def main():
     print("[INFO]: Setup complete...")
     
     # Run the simulator
-    run_simulator(sim, scene, robot)
+    run_simulator(sim, scene, kuavo_robot)
 
 if __name__ == "__main__":
     main()
