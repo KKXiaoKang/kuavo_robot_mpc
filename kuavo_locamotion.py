@@ -45,6 +45,8 @@ from kuavo_cfg import KINOVA_ROBOTIQ, KINOVA_ROBOTIQ_HPD
 import rospy
 from kuavo_msgs.msg import jointCmd    # /joint_cmd
 from kuavo_msgs.msg import sensorsData # /sensor_data_raw
+from std_srvs.srv import SetBool, SetBoolResponse  
+
 DEBUG_FLAG = True
 
 rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
@@ -78,8 +80,13 @@ class KuavoRobotController():
     [4, 9] # 头
     """
     def __init__(self):
+        # state/cmd
         self.robot_sensor_data_pub = rospy.Publisher('/sensors_data_raw', sensorsData, queue_size=10)
         self.robot_joint_cmd_sub = rospy.Subscriber('/joint_cmd', jointCmd, self.joint_cmd_callback)
+
+        #  仿真开始标志
+        self.sim_running = True
+        self.sim_start_srv = rospy.Service('sim_start', SetBool, self.sim_start_callback)
 
         # Load joint configurations from JSON file
         config_path = os.path.join(os.path.dirname(__file__), "config", "joint_name.json")
@@ -101,6 +108,28 @@ class KuavoRobotController():
         self._leg_idx = []
         self._head_idx = []
         self._ocs2_idx = []
+
+    def sim_start_callback(self, req):
+        """
+        仿真启动服务的回调函数
+        Args:
+            req: SetBool请求，data字段为True表示启动仿真，False表示停止仿真
+        Returns:
+            SetBoolResponse: 服务响应
+        """
+        response = SetBoolResponse()
+        
+        self.sim_running = req.data
+
+        if req.data:
+            rospy.loginfo("Simulation started")
+        else:
+            rospy.loginfo("Simulation stopped")
+        
+        response.success = True
+        response.message = "Simulation control successful"
+        
+        return response
 
     def setup_joint_indices(self, joint_names):
         """Setup joint indices based on joint names"""
@@ -142,12 +171,12 @@ class KuavoRobotController():
         sensor_data.sensor_time = current_time
 
         # IMU数据
-        sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
-        sensor_data.imu_data.gyro.y = ang_vel_b[1]  # ang_vel
-        sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
-        sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
-        sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
-        sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.gyro.x = -ang_vel_b[0]   # ang_vel
+        sensor_data.imu_data.gyro.y = -ang_vel_b[1]  # ang_vel
+        sensor_data.imu_data.gyro.z = -ang_vel_b[2]  # ang_vel
+        sensor_data.imu_data.acc.x = -lin_acc_b[0]  # lin_acc
+        sensor_data.imu_data.acc.y = -lin_acc_b[1]  # lin_acc
+        sensor_data.imu_data.acc.z = -lin_acc_b[2]  # lin_acc
         sensor_data.imu_data.quat.w = quat_w[0]  # 旋转矩阵
         sensor_data.imu_data.quat.x = quat_w[1]  # 旋转矩阵
         sensor_data.imu_data.quat.y = quat_w[2]  # 旋转矩阵
@@ -215,8 +244,16 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, rob
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
     robot.setup_joint_indices(joint_names)
     
+    # while not robot.sim_running:
+    #     rospy.sleep(0.1)
+    #     rospy.loginfo("Waiting for simulation start signal...")
+        
     # Simulate physics
     while simulation_app.is_running():
+        if not robot.sim_running:
+            rospy.sleep(1)
+            rospy.loginfo("Waiting for simulation start signal...")
+            continue
         # Reset every 500 steps
         if count % 500 == 0:
             # reset counter
