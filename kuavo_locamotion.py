@@ -222,12 +222,12 @@ class KuavoRobotController():
         sensor_data.sensor_time = current_time
 
         # IMU数据
-        sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
-        sensor_data.imu_data.gyro.y = ang_vel_b[1]  # ang_vel
-        sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
-        sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
-        sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
-        sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.gyro.x = -ang_vel_b[0]   # ang_vel
+        sensor_data.imu_data.gyro.y = -ang_vel_b[1]  # ang_vel
+        sensor_data.imu_data.gyro.z = -ang_vel_b[2]  # ang_vel
+        sensor_data.imu_data.acc.x = -lin_acc_b[0]  # lin_acc
+        sensor_data.imu_data.acc.y = -lin_acc_b[1]  # lin_acc
+        sensor_data.imu_data.acc.z = -lin_acc_b[2]  # lin_acc
         sensor_data.imu_data.quat.w = quat_w[0]  # 旋转矩阵
         sensor_data.imu_data.quat.x = quat_w[1]  # 旋转矩阵
         sensor_data.imu_data.quat.y = quat_w[2]  # 旋转矩阵
@@ -356,28 +356,28 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             rospy.loginfo("Waiting for simulation start signal...")
             continue
 
-        # Reset -- 重置
-        if count % 500 == 0:
-            # reset counter
-            count = 0
-            # reset the scene entities
-            # root state
-            # we offset the root state by the origin since the states are written in simulation world frame
-            # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-            root_state = scene["robot"].data.default_root_state.clone()
-            root_state[:, :3] += scene.env_origins
-            scene["robot"].write_root_pose_to_sim(root_state[:, :7])
-            scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
-            # set joint positions with some noise
-            joint_pos, joint_vel = (
-                scene["robot"].data.default_joint_pos.clone(),
-                scene["robot"].data.default_joint_vel.clone(),
-            )
-            joint_pos += torch.rand_like(joint_pos) * 0.1
-            scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
-            # clear internal buffers
-            scene.reset()
-            print("[INFO]: Resetting robot state...")
+        # # Reset -- 重置
+        # if count % 500 == 0:
+        #     # reset counter
+        #     count = 0
+        #     # reset the scene entities
+        #     # root state
+        #     # we offset the root state by the origin since the states are written in simulation world frame
+        #     # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
+        #     root_state = scene["robot"].data.default_root_state.clone()
+        #     root_state[:, :3] += scene.env_origins
+        #     scene["robot"].write_root_pose_to_sim(root_state[:, :7])
+        #     scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
+        #     # set joint positions with some noise
+        #     joint_pos, joint_vel = (
+        #         scene["robot"].data.default_joint_pos.clone(),
+        #         scene["robot"].data.default_joint_vel.clone(),
+        #     )
+        #     joint_pos += torch.rand_like(joint_pos) * 0.1
+        #     scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
+        #     # clear internal buffers
+        #     scene.reset()
+        #     print("[INFO]: Resetting robot state...")
 
         # 更新传感器数据
         if not FIRST_TIME_FLAG:
@@ -408,32 +408,32 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             base_link_ang_vel = body_state_w[0][10:13] # [wx, wy, wz]
             
             # 提取加速度
-            base_link_lin_acc = body_acc_w[0][0:3] # [ax, ay, az]
-            base_link_ang_acc = body_acc_w[0][3:6] # [wx, wy, wz]
+            base_link_lin_acc = body_acc_w[0][0:3] # [vax, vay, vaz]
+            base_link_ang_acc = body_acc_w[0][3:6] # [wax, way, waz]
 
             # target 
+            # target_ang_vel = ang_vel_b
+            # target_lin_acc = lin_acc_b
+            # target_quat_w = quat_w
             target_ang_vel = base_link_ang_vel
             target_lin_acc = base_link_lin_acc
             target_quat_w = base_link_quat_w
-            # print("--------------------------------")
-            # print("target_ang_vel: ", target_ang_vel)
-            # print("target_lin_acc: ", target_lin_acc)
-            # print("target_quat_w: ", target_quat_w)
-            # print("--------------------------------")
 
             kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
 
             joint_cmd = kuavo_robot.joint_cmd
-            if joint_cmd is not None:   
+            if joint_cmd is None:
+                continue
+            else:   
                 # 创建一个与机器人总关节数相同的零力矩数组
                 full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
                 # 将收到的力矩命令映射到对应的关节索引上
-                for i in range(len(kuavo_robot._leg_idx)//2): # type: ignore
+                for i in range((len(kuavo_robot._leg_idx)//2)): # type: ignore
                     full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
                     full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # type: ignore # 右腿
 
                 # 手部                    
-                for i in range(len(kuavo_robot._arm_idx)//2): # type: ignore
+                for i in range((len(kuavo_robot._arm_idx)//2)): # type: ignore
                     full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # type: ignore # 左臂
                     full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # type: ignore # 右臂
 
@@ -455,6 +455,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         scene.update(sim_dt)
         # 第一帧结束
         FIRST_TIME_FLAG = False
+        # 打印时间
+        print("sim_time: ", sim_time)
 
 
 def main():
