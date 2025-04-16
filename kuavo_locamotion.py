@@ -106,8 +106,18 @@ import os
 class KuavoRobotController():
     """
     # 45 - 机器人
-    [2, 3, 7, 8, 12, 13, 16, 17, 20, 21, 24, 25, 26, 27] # 手
-    [0, 1, 5, 6, 10, 11, 14, 15, 18, 19, 22, 23] # 脚
+    [2, 3, 7, 8, 12, 13, 
+    16, 17, 20, 21, 24, 25, 
+    26, 27] # 手
+    zarm_l1_joint / zarm_r1_joint / zarm_l2_joint / zarm_r2_joint / zarm_l3_joint / zarm_r3_joint 
+    zarm_l4_joint / zarm_r4_joint / zarm_l5_joint / zarm_r5_joint / zarm_l6_joint / zarm_r6_joint
+    zarm_l7_joint / zarm_r7_joint
+    
+    [0,  1,  5,  6, 10, 11, 
+    14, 15, 18, 19, 22, 23] # 脚 
+    leg_l1_joint / leg_r1_joint / leg_l2_joint / leg_r2_joint / leg_l3_joint / leg_r3_joint 
+    leg_l4_joint / leg_r4_joint / leg_l5_joint / leg_r5_joint / leg_l6_joint / leg_r6_joint
+
     [4, 9] # 头
     """
     def __init__(self):
@@ -228,12 +238,39 @@ class KuavoRobotController():
         sensor_data.joint_data.joint_vd = [0.0] * 28
         sensor_data.joint_data.joint_current = [0.0] * 28
 
-        # 关节数据赋值
-        for i in range(len(self._ocs2_idx)):
-            sensor_data.joint_data.joint_q[i] = joint_pos[self._ocs2_idx[i]]
-            sensor_data.joint_data.joint_v[i] = joint_vel[self._ocs2_idx[i]]
-            sensor_data.joint_data.joint_current[i] = applied_torque[self._ocs2_idx[i]]
+        # 腿部
+        for i in range(len(self._leg_idx)//2):
+            sensor_data.joint_data.joint_q[i] = joint_pos[self._leg_idx[2*i]]       
+            sensor_data.joint_data.joint_q[i+6] = joint_pos[self._leg_idx[2*i+1]]   
 
+            sensor_data.joint_data.joint_v[i] = joint_vel[self._leg_idx[2*i]]
+            sensor_data.joint_data.joint_v[i+6] = joint_vel[self._leg_idx[2*i+1]]
+
+            sensor_data.joint_data.joint_current[i] = applied_torque[self._leg_idx[2*i]]
+            sensor_data.joint_data.joint_current[i+6] = applied_torque[self._leg_idx[2*i+1]]
+
+        # 手部
+        for i in range(len(self._arm_idx)//2):
+            sensor_data.joint_data.joint_q[12+i] = joint_pos[self._arm_idx[2*i]]
+            sensor_data.joint_data.joint_q[19+i] = joint_pos[self._arm_idx[2*i+1]]
+
+            sensor_data.joint_data.joint_v[12+i] = joint_vel[self._arm_idx[2*i]]
+            sensor_data.joint_data.joint_v[19+i] = joint_vel[self._arm_idx[2*i+1]]
+            
+            sensor_data.joint_data.joint_current[12+i] = applied_torque[self._arm_idx[2*i]]
+            sensor_data.joint_data.joint_current[19+i] = applied_torque[self._arm_idx[2*i+1]]
+
+
+        # 头部
+        sensor_data.joint_data.joint_q[26] = joint_pos[self._head_idx[0]]
+        sensor_data.joint_data.joint_q[27] = joint_pos[self._head_idx[1]]
+
+        sensor_data.joint_data.joint_v[26] = joint_vel[self._head_idx[0]]
+        sensor_data.joint_data.joint_v[27] = joint_vel[self._head_idx[1]]
+
+        sensor_data.joint_data.joint_current[26] = applied_torque[self._head_idx[0]]
+        sensor_data.joint_data.joint_current[27] = applied_torque[self._head_idx[1]]
+        
         # 发布数据
         self.robot_sensor_data_pub.publish(sensor_data)
 
@@ -352,16 +389,46 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         # 更新传感器数据
         kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
 
-        # TODO: 更新MPC控制器
+        # # TODO: 更新MPC控制器
         joint_cmd = kuavo_robot.joint_cmd
         if joint_cmd is not None:   
             # 创建一个与机器人总关节数相同的零力矩数组
             full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
             
             # 将收到的力矩命令映射到对应的关节索引上
-            for i, ocs2_idx in enumerate(kuavo_robot._ocs2_idx):
-                full_torque_cmd[ocs2_idx] = joint_cmd.tau[i]
-        
+            full_torque_cmd[kuavo_robot._leg_idx[0]] = joint_cmd.tau[0]  # leg_l1_joint
+            full_torque_cmd[kuavo_robot._leg_idx[2]] = joint_cmd.tau[1]  # leg_l2_joint
+            full_torque_cmd[kuavo_robot._leg_idx[4]] = joint_cmd.tau[2]  # leg_l3_joint
+            full_torque_cmd[kuavo_robot._leg_idx[6]] = joint_cmd.tau[3]  # leg_l4_joint
+            full_torque_cmd[kuavo_robot._leg_idx[8]] = joint_cmd.tau[4]  # leg_l5_joint
+            full_torque_cmd[kuavo_robot._leg_idx[10]] = joint_cmd.tau[5]  # leg_l6_joint
+            
+            full_torque_cmd[kuavo_robot._leg_idx[1]] = joint_cmd.tau[6]  # leg_r1_joint
+            full_torque_cmd[kuavo_robot._leg_idx[3]] = joint_cmd.tau[7]  # leg_r2_joint
+            full_torque_cmd[kuavo_robot._leg_idx[5]] = joint_cmd.tau[8]  # leg_r3_joint
+            full_torque_cmd[kuavo_robot._leg_idx[7]] = joint_cmd.tau[9]  # leg_r4_joint
+            full_torque_cmd[kuavo_robot._leg_idx[9]] = joint_cmd.tau[10]  # leg_r5_joint
+            full_torque_cmd[kuavo_robot._leg_idx[11]] = joint_cmd.tau[11]  # leg_r6_joint
+            
+            full_torque_cmd[kuavo_robot._arm_idx[0]] = joint_cmd.tau[12]  # zarm_l1_joint
+            full_torque_cmd[kuavo_robot._arm_idx[2]] = joint_cmd.tau[13]  # zarm_l2_joint
+            full_torque_cmd[kuavo_robot._arm_idx[4]] = joint_cmd.tau[14]  # zarm_l3_joint
+            full_torque_cmd[kuavo_robot._arm_idx[6]] = joint_cmd.tau[15]  # zarm_l4_joint
+            full_torque_cmd[kuavo_robot._arm_idx[8]] = joint_cmd.tau[16]  # zarm_l5_joint
+            full_torque_cmd[kuavo_robot._arm_idx[10]] = joint_cmd.tau[17]  # zarm_l6_joint
+            full_torque_cmd[kuavo_robot._arm_idx[12]] = joint_cmd.tau[18]  # zarm_l7_joint
+
+            full_torque_cmd[kuavo_robot._arm_idx[1]] = joint_cmd.tau[19]  # zarm_r1_joint
+            full_torque_cmd[kuavo_robot._arm_idx[3]] = joint_cmd.tau[20]  # zarm_r2_joint
+            full_torque_cmd[kuavo_robot._arm_idx[5]] = joint_cmd.tau[21]  # zarm_r3_joint
+            full_torque_cmd[kuavo_robot._arm_idx[7]] = joint_cmd.tau[22]  # zarm_r4_joint
+            full_torque_cmd[kuavo_robot._arm_idx[9]] = joint_cmd.tau[23]  # zarm_r5_joint
+            full_torque_cmd[kuavo_robot._arm_idx[11]] = joint_cmd.tau[24]  # zarm_r6_joint
+            full_torque_cmd[kuavo_robot._arm_idx[13]] = joint_cmd.tau[25]  # zarm_r7_joint
+            
+            full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # head_l1_joint
+            full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # head_r1_joint
+
             # 将力矩命令转换为tensor并发送给机器人
             torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
             scene["robot"].set_joint_effort_target(torque_tensor)
