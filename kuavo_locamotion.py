@@ -293,8 +293,8 @@ class BipedSceneCfg(InteractiveSceneCfg):
         prim_path="/World/defaultGroundPlane",
         spawn=sim_utils.GroundPlaneCfg(
             physics_material=sim_utils.RigidBodyMaterialCfg(
-                static_friction=1.0,
-                dynamic_friction=1.0,
+                static_friction=0.5,
+                dynamic_friction=0.5,
                 restitution=0.0
             )
         )
@@ -427,16 +427,52 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             else:   
                 # 创建一个与机器人总关节数相同的零力矩数组
                 full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
-                # 将收到的力矩命令映射到对应的关节索引上
-                for i in range((len(kuavo_robot._leg_idx)//2)): # type: ignore
-                    full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
-                    full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # type: ignore # 右腿
+                print("len(full_torque_cmd): ", len(full_torque_cmd))
+                # # 将收到的力矩命令映射到对应的关节索引上
+                # for i in range((len(kuavo_robot._leg_idx)//2)): # type: ignore
+                #     full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
+                #     full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # type: ignore # 右腿
 
-                # 手部                    
-                for i in range((len(kuavo_robot._arm_idx)//2)): # type: ignore
-                    full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # type: ignore # 左臂
-                    full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # type: ignore # 右臂
+                # # 手部                    
+                # for i in range((len(kuavo_robot._arm_idx)//2)): # type: ignore
+                #     full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # type: ignore # 左臂
+                #     full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # type: ignore # 右臂
 
+                # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[0]] = joint_cmd.tau[0]  # type: ignore # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[2]] = joint_cmd.tau[1]  # type: ignore # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[4]] = joint_cmd.tau[2]  # type: ignore # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[6]] = joint_cmd.tau[3]  # type: ignore # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[8]] = joint_cmd.tau[4]  # type: ignore # 左腿
+                full_torque_cmd[kuavo_robot._leg_idx[10]] = joint_cmd.tau[5]  # type: ignore # 左腿
+
+                # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[1]] = joint_cmd.tau[6]  # type: ignore # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[3]] = joint_cmd.tau[7]  # type: ignore # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[5]] = joint_cmd.tau[8]  # type: ignore # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[7]] = joint_cmd.tau[9]  # type: ignore # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[9]] = joint_cmd.tau[10]  # type: ignore # 右腿
+                full_torque_cmd[kuavo_robot._leg_idx[11]] = joint_cmd.tau[11]  # type: ignore # 右腿
+
+                # 左手     
+                full_torque_cmd[kuavo_robot._arm_idx[0]] = joint_cmd.tau[12]  # type: ignore # 左臂
+                full_torque_cmd[kuavo_robot._arm_idx[2]] = joint_cmd.tau[13]  # type: ignore # 左臂
+                full_torque_cmd[kuavo_robot._arm_idx[4]] = joint_cmd.tau[14]  # type: ignore # 左臂
+                full_torque_cmd[kuavo_robot._arm_idx[6]] = joint_cmd.tau[15]  # type: ignore # 左臂
+                full_torque_cmd[kuavo_robot._arm_idx[8]] = joint_cmd.tau[16]  # type: ignore # 左臂
+                full_torque_cmd[kuavo_robot._arm_idx[10]] = joint_cmd.tau[17]  # type: ignore # 左臂    
+                full_torque_cmd[kuavo_robot._arm_idx[12]] = joint_cmd.tau[18]  # type: ignore # 左臂
+                
+                # 右手
+                full_torque_cmd[kuavo_robot._arm_idx[1]] = joint_cmd.tau[19]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[3]] = joint_cmd.tau[20]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[5]] = joint_cmd.tau[21]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[7]] = joint_cmd.tau[22]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[9]] = joint_cmd.tau[23]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[11]] = joint_cmd.tau[24]  # type: ignore # 右臂
+                full_torque_cmd[kuavo_robot._arm_idx[13]] = joint_cmd.tau[25]  # type: ignore # 右臂
+                
+                # 头部
                 full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # type: ignore # head_l1_joint
                 full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # type: ignore # head_r1_joint
 
