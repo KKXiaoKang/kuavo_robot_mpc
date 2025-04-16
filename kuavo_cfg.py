@@ -31,6 +31,27 @@ print(" usd_path : ", usd_dir_path + robot_usd)
 # Configuration
 ##
 
+# Global parameters for PD control
+USE_TORQUE_CONTROL = True  # 设置为True时使用全力矩模式，False时使用PD控制
+
+# Arm parameters
+ARM_STIFFNESS = 0.0 if USE_TORQUE_CONTROL else 15.0
+ARM_DAMPING = 0.0 if USE_TORQUE_CONTROL else 3.0
+
+# Leg parameters
+LEG_STIFFNESS_1_4 = 0.0 if USE_TORQUE_CONTROL else 60.0
+LEG_STIFFNESS_5 = 0.0 if USE_TORQUE_CONTROL else 30.0
+LEG_STIFFNESS_6 = 0.0 if USE_TORQUE_CONTROL else 15.0
+
+LEG_DAMPING_1 = 0.0 if USE_TORQUE_CONTROL else 10.0
+LEG_DAMPING_2 = 0.0 if USE_TORQUE_CONTROL else 6.0
+LEG_DAMPING_3_4 = 0.0 if USE_TORQUE_CONTROL else 12.0
+LEG_DAMPING_5_6 = 0.0 if USE_TORQUE_CONTROL else 22.0
+
+# Head parameters
+HEAD_STIFFNESS = 0.0 if USE_TORQUE_CONTROL else 300.0
+HEAD_DAMPING = 0.0 if USE_TORQUE_CONTROL else 30.0
+
 KINOVA_ROBOTIQ = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
         usd_path=usd_dir_path + robot_usd,
@@ -45,7 +66,7 @@ KINOVA_ROBOTIQ = ArticulationCfg(
         activate_contact_sensors=False,
     ),
     init_state=ArticulationCfg.InitialStateCfg(
-        pos=(0.0, 0.0, 0.8664),
+        pos=(0.0, 0.0, 0.8464),
         rot=(1.0, 0.0, 0.0, 0.0),
         lin_vel=(0.0, 0.0, 0.0),
         ang_vel=(0.0, 0.0, 0.0),
@@ -78,22 +99,22 @@ KINOVA_ROBOTIQ = ArticulationCfg(
                 "zarm_[lr][5-7]_joint": 1e30,
             },
             stiffness={
-                "zarm_[lr][1]_joint": 0.0,
-                "zarm_[lr][2]_joint": 0.0,
-                "zarm_[lr][3]_joint": 0.0,
-                "zarm_[lr][4]_joint": 0.0,
-                "zarm_[lr][5]_joint": 0.0,
-                "zarm_[lr][6]_joint": 0.0,
-                "zarm_[lr][7]_joint": 0.0,
+                "zarm_[lr][1]_joint": ARM_STIFFNESS,
+                "zarm_[lr][2]_joint": ARM_STIFFNESS,
+                "zarm_[lr][3]_joint": ARM_STIFFNESS,
+                "zarm_[lr][4]_joint": ARM_STIFFNESS,
+                "zarm_[lr][5]_joint": ARM_STIFFNESS,
+                "zarm_[lr][6]_joint": ARM_STIFFNESS,
+                "zarm_[lr][7]_joint": ARM_STIFFNESS,
             },
             damping={
-                "zarm_[lr][1]_joint": 0.0,
-                "zarm_[lr][2]_joint": 0.0,
-                "zarm_[lr][3]_joint": 0.0,
-                "zarm_[lr][4]_joint": 0.0,
-                "zarm_[lr][5]_joint": 0.0,
-                "zarm_[lr][6]_joint": 0.0,
-                "zarm_[lr][7]_joint": 0.0,
+                "zarm_[lr][1]_joint": ARM_DAMPING,
+                "zarm_[lr][2]_joint": ARM_DAMPING,
+                "zarm_[lr][3]_joint": ARM_DAMPING,
+                "zarm_[lr][4]_joint": ARM_DAMPING,
+                "zarm_[lr][5]_joint": ARM_DAMPING,
+                "zarm_[lr][6]_joint": ARM_DAMPING,
+                "zarm_[lr][7]_joint": ARM_DAMPING,
             },
         ),
         "legs": ImplicitActuatorCfg(
@@ -101,28 +122,28 @@ KINOVA_ROBOTIQ = ArticulationCfg(
             effort_limit=1e30,
             velocity_limit=1e30,
             stiffness={
-                "leg_[lr][1]_joint": 0.0,
-                "leg_[lr][2]_joint": 0.0,
-                "leg_[lr][3]_joint": 0.0,
-                "leg_[lr][4]_joint": 0.0,
-                "leg_[lr][5]_joint": 0.0,
-                "leg_[lr][6]_joint": 0.0,
+                "leg_[lr][1]_joint": LEG_STIFFNESS_1_4,
+                "leg_[lr][2]_joint": LEG_STIFFNESS_1_4,
+                "leg_[lr][3]_joint": LEG_STIFFNESS_1_4,
+                "leg_[lr][4]_joint": LEG_STIFFNESS_1_4,
+                "leg_[lr][5]_joint": LEG_STIFFNESS_5,
+                "leg_[lr][6]_joint": LEG_STIFFNESS_6,
             },
             damping={
-                "leg_[lr][1]_joint": 0.0,
-                "leg_[lr][2]_joint": 0.0,
-                "leg_[lr][3]_joint": 0.0,
-                "leg_[lr][4]_joint": 0.0,
-                "leg_[lr][5]_joint": 0.0,
-                "leg_[lr][6]_joint": 0.0,
+                "leg_[lr][1]_joint": LEG_DAMPING_1,
+                "leg_[lr][2]_joint": LEG_DAMPING_2,
+                "leg_[lr][3]_joint": LEG_DAMPING_3_4,
+                "leg_[lr][4]_joint": LEG_DAMPING_3_4,
+                "leg_[lr][5]_joint": LEG_DAMPING_5_6,
+                "leg_[lr][6]_joint": LEG_DAMPING_5_6,
             },
         ),
         "head": ImplicitActuatorCfg(
             joint_names_expr=["zhead_[1-2]_joint"],
             effort_limit=1e30,
             velocity_limit=1e30,
-            stiffness=300.0,
-            damping=30.0,
+            stiffness=HEAD_STIFFNESS,
+            damping=HEAD_DAMPING,
         ),
     },
 )

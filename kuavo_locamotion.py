@@ -205,7 +205,7 @@ class KuavoRobotController():
         """
         self.joint_cmd = joint_cmd
         
-    def update_sensor_data(self, ang_vel_b, lin_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc):
+    def update_sensor_data(self, ang_vel_b, lin_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc, sim_time):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
@@ -215,19 +215,26 @@ class KuavoRobotController():
         # IMU数据组合
         sensor_data = sensorsData()
 
-        # 状态时间更新
-        current_time = rospy.Time.now()
+        # 使用仿真时间dt更新状态时间
+        current_time = rospy.Time.from_sec(float(sim_time))
         sensor_data.header.stamp = current_time
         sensor_data.header.frame_id = "world"  # 设置适当的frame_id
         sensor_data.sensor_time = current_time
+        print("current_time: ", current_time)
 
         # IMU数据
-        sensor_data.imu_data.gyro.x = -ang_vel_b[0]   # ang_vel
-        sensor_data.imu_data.gyro.y = -ang_vel_b[1]  # ang_vel
-        sensor_data.imu_data.gyro.z = -ang_vel_b[2]  # ang_vel
-        sensor_data.imu_data.acc.x = -lin_acc_b[0]  # lin_acc
-        sensor_data.imu_data.acc.y = -lin_acc_b[1]  # lin_acc
-        sensor_data.imu_data.acc.z = -lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
+        sensor_data.imu_data.gyro.y = ang_vel_b[1]  # ang_vel
+        sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
+        sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
+        sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
+        # sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
+        sensor_data.imu_data.acc.z = lin_acc_b[2] + 9.81  # lin_acc
+
+        # sensor_data.imu_data.free_acc.x = lin_acc_b[0]  # lin_acc
+        # sensor_data.imu_data.free_acc.y = lin_acc_b[1]  # lin_acc
+        # sensor_data.imu_data.free_acc.z = lin_acc_b[2]  # lin_acc
+
         sensor_data.imu_data.quat.w = quat_w[0]  # 旋转矩阵
         sensor_data.imu_data.quat.x = quat_w[1]  # 旋转矩阵
         sensor_data.imu_data.quat.y = quat_w[2]  # 旋转矩阵
@@ -425,7 +432,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             target_lin_acc = base_link_lin_acc
             target_quat_w = base_link_quat_w
 
-            kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
+            kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, 
+                                         joint_pos, joint_vel, applied_torque, joint_acc, sim_time)
 
             joint_cmd = kuavo_robot.joint_cmd
             if joint_cmd is None:
@@ -503,7 +511,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
 def main():
     """Main function."""
     # Initialize the simulation context
-    sim_cfg = sim_utils.SimulationCfg(dt=0.005, device=args_cli.device)
+    sim_cfg = sim_utils.SimulationCfg(dt=0.002, device=args_cli.device)
     sim = sim_utils.SimulationContext(sim_cfg)
     
     # Set main camera
