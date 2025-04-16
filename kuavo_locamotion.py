@@ -356,6 +356,19 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         
         # 更新传感器数据
         if not FIRST_TIME_FLAG:
+            # 获取IMU数据
+            lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()[0]  # 线速度
+            ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()[0]  # 角速度
+            lin_acc_b = scene["imu_base"].data.lin_acc_b.tolist()[0]  # 线加速度
+            ang_acc_b = scene["imu_base"].data.ang_acc_b.tolist()[0]  # 角加速度
+            quat_w = scene["imu_base"].data.quat_w.tolist()[0]  # 旋转矩阵
+
+            # 获取机器人的数据
+            joint_pos = scene["robot"].data.joint_pos.tolist()[0]
+            joint_vel = scene["robot"].data.joint_vel.tolist()[0]
+            joint_acc = scene["robot"].data.joint_acc.tolist()[0]
+            applied_torque = scene["robot"].data.applied_torque.tolist()[0]
+
             kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
             joint_cmd = kuavo_robot.joint_cmd
             if joint_cmd is not None:   
@@ -390,18 +403,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         scene.update(sim_dt)
         # 第一帧结束
         FIRST_TIME_FLAG = False
-        # 获取IMU数据
-        lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()[0]  # 线速度
-        ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()[0]  # 角速度
-        lin_acc_b = scene["imu_base"].data.lin_acc_b.tolist()[0]  # 线加速度
-        ang_acc_b = scene["imu_base"].data.ang_acc_b.tolist()[0]  # 角加速度
-        quat_w = scene["imu_base"].data.quat_w.tolist()[0]  # 旋转矩阵
-
-        # 获取机器人的数据
-        joint_pos = scene["robot"].data.joint_pos.tolist()[0]
-        joint_vel = scene["robot"].data.joint_vel.tolist()[0]
-        joint_acc = scene["robot"].data.joint_acc.tolist()[0]
-        applied_torque = scene["robot"].data.applied_torque.tolist()[0]
 
         if DEBUG_FLAG:
             # print("-------------------------------")
