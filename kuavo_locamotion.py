@@ -204,7 +204,7 @@ class KuavoRobotController():
         """
         self.joint_cmd = joint_cmd
         
-    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque):
+    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
@@ -250,6 +250,9 @@ class KuavoRobotController():
             sensor_data.joint_data.joint_current[i] = applied_torque[self._leg_idx[2*i]]
             sensor_data.joint_data.joint_current[i+6] = applied_torque[self._leg_idx[2*i+1]]
 
+            sensor_data.joint_data.joint_vd[i] = joint_acc[self._leg_idx[2*i]]
+            sensor_data.joint_data.joint_vd[i+6] = joint_acc[self._leg_idx[2*i+1]]
+
         # 手部
         for i in range(len(self._arm_idx)//2):
             sensor_data.joint_data.joint_q[12+i] = joint_pos[self._arm_idx[2*i]]
@@ -261,6 +264,8 @@ class KuavoRobotController():
             sensor_data.joint_data.joint_current[12+i] = applied_torque[self._arm_idx[2*i]]
             sensor_data.joint_data.joint_current[19+i] = applied_torque[self._arm_idx[2*i+1]]
 
+            sensor_data.joint_data.joint_vd[12+i] = joint_acc[self._arm_idx[2*i]]
+            sensor_data.joint_data.joint_vd[19+i] = joint_acc[self._arm_idx[2*i+1]]
 
         # 头部
         sensor_data.joint_data.joint_q[26] = joint_pos[self._head_idx[0]]
@@ -268,6 +273,9 @@ class KuavoRobotController():
 
         sensor_data.joint_data.joint_v[26] = joint_vel[self._head_idx[0]]
         sensor_data.joint_data.joint_v[27] = joint_vel[self._head_idx[1]]
+
+        sensor_data.joint_data.joint_vd[26] = joint_acc[self._head_idx[0]]
+        sensor_data.joint_data.joint_vd[27] = joint_acc[self._head_idx[1]]
 
         sensor_data.joint_data.joint_current[26] = applied_torque[self._head_idx[0]]
         sensor_data.joint_data.joint_current[27] = applied_torque[self._head_idx[1]]
@@ -347,7 +355,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         
         # 更新传感器数据
         if not FIRST_TIME_FLAG:
-            kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
+            kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
             joint_cmd = kuavo_robot.joint_cmd
             if joint_cmd is not None:   
                 # 创建一个与机器人总关节数相同的零力矩数组
@@ -356,7 +364,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 for i in range(len(kuavo_robot._leg_idx)//2):
                     full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # 左腿
                     full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # 右腿
-                    
+
+                # 手部                    
                 for i in range(len(kuavo_robot._arm_idx)//2):
                     full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # 左臂
                     full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # 右臂
@@ -367,10 +376,10 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 # 将力矩命令转换为tensor并发送给机器人
                 torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
                 scene["robot"].set_joint_effort_target(torque_tensor)
-                scene["robot"].write_data_to_sim()
+                # scene["robot"].write_data_to_sim()
 
         # write data to sim
-        scene.write_data_to_sim()
+        scene["robot"].write_data_to_sim()
         # perform step
         sim.step()
         # update sim-time
@@ -390,6 +399,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         # 获取机器人的数据
         joint_pos = scene["robot"].data.joint_pos.tolist()[0]
         joint_vel = scene["robot"].data.joint_vel.tolist()[0]
+        joint_acc = scene["robot"].data.joint_acc.tolist()[0]
         applied_torque = scene["robot"].data.applied_torque.tolist()[0]
 
         if DEBUG_FLAG:
