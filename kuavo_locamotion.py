@@ -205,7 +205,7 @@ class KuavoRobotController():
         """
         self.joint_cmd = joint_cmd
         
-    def update_sensor_data(self, lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc):
+    def update_sensor_data(self, ang_vel_b, lin_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc):
         """
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()  # 角速度
@@ -333,7 +333,9 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
     body_names = scene["robot"].data.body_names   # 包含所有fix固定的joint
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
     kuavo_robot.setup_joint_indices(joint_names)
-    
+    print("joint_names: ", joint_names) 
+    print("body_names: ", body_names)
+
     # 设置机器人初始状态
     root_state = scene["robot"].data.default_root_state.clone()
     root_state[:, :3] += scene.env_origins
@@ -353,7 +355,30 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             rospy.sleep(1)
             rospy.loginfo("Waiting for simulation start signal...")
             continue
-        
+
+        # Reset -- 重置
+        if count % 500 == 0:
+            # reset counter
+            count = 0
+            # reset the scene entities
+            # root state
+            # we offset the root state by the origin since the states are written in simulation world frame
+            # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
+            root_state = scene["robot"].data.default_root_state.clone()
+            root_state[:, :3] += scene.env_origins
+            scene["robot"].write_root_pose_to_sim(root_state[:, :7])
+            scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
+            # set joint positions with some noise
+            joint_pos, joint_vel = (
+                scene["robot"].data.default_joint_pos.clone(),
+                scene["robot"].data.default_joint_vel.clone(),
+            )
+            joint_pos += torch.rand_like(joint_pos) * 0.1
+            scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
+            # clear internal buffers
+            scene.reset()
+            print("[INFO]: Resetting robot state...")
+
         # 更新传感器数据
         if not FIRST_TIME_FLAG:
             # 获取IMU数据
@@ -363,13 +388,41 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             ang_acc_b = scene["imu_base"].data.ang_acc_b.tolist()[0]  # 角加速度
             quat_w = scene["imu_base"].data.quat_w.tolist()[0]  # 旋转矩阵
 
-            # 获取机器人的数据
+            # 获取机器人的数据/关节层
             joint_pos = scene["robot"].data.joint_pos.tolist()[0]
             joint_vel = scene["robot"].data.joint_vel.tolist()[0]
             joint_acc = scene["robot"].data.joint_acc.tolist()[0]
             applied_torque = scene["robot"].data.applied_torque.tolist()[0]
+            
+            # 获取机器人的数据/质心层
+            body_state_w = scene["robot"].data.body_state_w.tolist()[0]
+            body_acc_w = scene["robot"].data.body_acc_w.tolist()[0]
 
-            kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
+            # 提取位置
+            base_link_state_w = body_state_w[0][0:3] # [x, y, z]
+            # 提取姿态
+            base_link_quat_w = body_state_w[0][3:7]  # [w, x, y, z]
+            # 提取线速度
+            base_link_lin_vel = body_state_w[0][7:10] # [vx, vy, vz]
+            # 提取角速度
+            base_link_ang_vel = body_state_w[0][10:13] # [wx, wy, wz]
+            
+            # 提取加速度
+            base_link_lin_acc = body_acc_w[0][0:3] # [ax, ay, az]
+            base_link_ang_acc = body_acc_w[0][3:6] # [wx, wy, wz]
+
+            # target 
+            target_ang_vel = base_link_ang_vel
+            target_lin_acc = base_link_lin_acc
+            target_quat_w = base_link_quat_w
+            # print("--------------------------------")
+            # print("target_ang_vel: ", target_ang_vel)
+            # print("target_lin_acc: ", target_lin_acc)
+            # print("target_quat_w: ", target_quat_w)
+            # print("--------------------------------")
+
+            kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, joint_pos, joint_vel, applied_torque, joint_acc)
+
             joint_cmd = kuavo_robot.joint_cmd
             if joint_cmd is not None:   
                 # 创建一个与机器人总关节数相同的零力矩数组
@@ -390,7 +443,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 # 将力矩命令转换为tensor并发送给机器人
                 torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
                 scene["robot"].set_joint_effort_target(torque_tensor)
-                # scene["robot"].write_data_to_sim()
 
         # write data to sim
         scene["robot"].write_data_to_sim()
@@ -404,26 +456,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         # 第一帧结束
         FIRST_TIME_FLAG = False
 
-        if DEBUG_FLAG:
-            # print("-------------------------------")
-            # print(scene["imu_base"].data)
-            # print("Received linear velocity: ", scene["imu_base"].data.lin_vel_b)
-            # print("Received angular velocity: ", scene["imu_base"].data.ang_vel_b)
-            # print("Received linear acceleration: ", scene["imu_base"].data.lin_acc_b)
-            # print("Received angular acceleration: ", scene["imu_base"].data.ang_acc_b)
-
-            # print("Received linear velocity: ", lin_vel_b)
-            # print("Received angular velocity: ", ang_vel_b)
-            # print("Received linear acceleration: ", lin_acc_b)
-            # print("Received angular acceleration: ", ang_acc_b)
-
-            # print("joint_pos: ", joint_pos)
-            # print("joint_vel: ", joint_vel)
-            # print("body_names: ", body_names)
-            # print("joint_names: ", joint_names)
-            # print("applied_torque: ", applied_torque)
-            # print("-------------------------------")
-            pass
 
 def main():
     """Main function."""
