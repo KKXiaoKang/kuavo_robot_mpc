@@ -228,7 +228,6 @@ class KuavoRobotController():
         sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
         sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
         sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
-        # sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
         sensor_data.imu_data.acc.z = lin_acc_b[2] + 9.81  # lin_acc
 
         # sensor_data.imu_data.free_acc.x = lin_acc_b[0]  # lin_acc
