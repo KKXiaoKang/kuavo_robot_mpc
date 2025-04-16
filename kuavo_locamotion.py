@@ -39,7 +39,8 @@ from isaaclab.utils import configclass
 from isaaclab.sensors import ImuCfg # IMU设置
 
 # 导入你的机器人配置
-from kuavo_cfg import KINOVA_ROBOTIQ, KINOVA_ROBOTIQ_HPD
+from kuavo_cfg import KINOVA_ROBOTIQ
+# from kuavo_cfg import KINOVA_ROBOTIQ_HPD
 
 """ ROS ROBOT CONTROL """
 import rospy
@@ -361,17 +362,17 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 # 创建一个与机器人总关节数相同的零力矩数组
                 full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
                 # 将收到的力矩命令映射到对应的关节索引上
-                for i in range(len(kuavo_robot._leg_idx)//2):
-                    full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # 左腿
-                    full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # 右腿
+                for i in range(len(kuavo_robot._leg_idx)//2): # type: ignore
+                    full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
+                    full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # type: ignore # 右腿
 
                 # 手部                    
-                for i in range(len(kuavo_robot._arm_idx)//2):
-                    full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # 左臂
-                    full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # 右臂
+                for i in range(len(kuavo_robot._arm_idx)//2): # type: ignore
+                    full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # type: ignore # 左臂
+                    full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # type: ignore # 右臂
 
-                full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # head_l1_joint
-                full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # head_r1_joint
+                full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # type: ignore # head_l1_joint
+                full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # type: ignore # head_r1_joint
 
                 # 将力矩命令转换为tensor并发送给机器人
                 torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
