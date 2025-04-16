@@ -332,9 +332,15 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
 
     body_names = scene["robot"].data.body_names   # 包含所有fix固定的joint
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
+    default_mass = scene["robot"].data.default_mass.tolist()[0] # 检查mass质量
+    total_mass = 0.0
+    for i in range(len(scene["robot"].data.body_names)):
+        total_mass += default_mass[i]
+
     kuavo_robot.setup_joint_indices(joint_names)
     print("joint_names: ", joint_names) 
     print("body_names: ", body_names)
+    print("total_mass: ", total_mass)
 
     # 设置机器人初始状态
     root_state = scene["robot"].data.default_root_state.clone()
@@ -399,17 +405,17 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             body_acc_w = scene["robot"].data.body_acc_w.tolist()[0]
 
             # 提取位置
-            base_link_state_w = body_state_w[0][0:3] # [x, y, z]
+            base_link_state_w = body_state_w[1][0:3] # [x, y, z]
             # 提取姿态
-            base_link_quat_w = body_state_w[0][3:7]  # [w, x, y, z]
+            base_link_quat_w = body_state_w[1][3:7]  # [w, x, y, z]
             # 提取线速度
-            base_link_lin_vel = body_state_w[0][7:10] # [vx, vy, vz]
+            base_link_lin_vel = body_state_w[1][7:10] # [vx, vy, vz]
             # 提取角速度
-            base_link_ang_vel = body_state_w[0][10:13] # [wx, wy, wz]
+            base_link_ang_vel = body_state_w[1][10:13] # [wx, wy, wz]
             
             # 提取加速度
-            base_link_lin_acc = body_acc_w[0][0:3] # [vax, vay, vaz]
-            base_link_ang_acc = body_acc_w[0][3:6] # [wax, way, waz]
+            base_link_lin_acc = body_acc_w[1][0:3] # [vax, vay, vaz]
+            base_link_ang_acc = body_acc_w[1][3:6] # [wax, way, waz]
 
             # target 
             # target_ang_vel = ang_vel_b
@@ -427,7 +433,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             else:   
                 # 创建一个与机器人总关节数相同的零力矩数组
                 full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
-                print("len(full_torque_cmd): ", len(full_torque_cmd))
                 # # 将收到的力矩命令映射到对应的关节索引上
                 # for i in range((len(kuavo_robot._leg_idx)//2)): # type: ignore
                 #     full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
@@ -481,7 +486,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 scene["robot"].set_joint_effort_target(torque_tensor)
 
         # write data to sim
-        scene["robot"].write_data_to_sim()
+        scene.write_data_to_sim()
         # perform step
         sim.step()
         # update sim-time
@@ -492,7 +497,7 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         # 第一帧结束
         FIRST_TIME_FLAG = False
         # 打印时间
-        print("sim_time: ", sim_time)
+        # print("sim_time: ", sim_time)
 
 
 def main():

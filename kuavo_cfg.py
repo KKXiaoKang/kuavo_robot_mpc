@@ -72,10 +72,10 @@ KINOVA_ROBOTIQ = ArticulationCfg(
     actuators={
         "arms": ImplicitActuatorCfg(
             joint_names_expr=["zarm_[lr][1-7]_joint"],
-            velocity_limit=500,
+            velocity_limit=1e30,
             effort_limit={
-                "zarm_[lr][1-4]_joint": 500.0,
-                "zarm_[lr][5-7]_joint": 500.0,
+                "zarm_[lr][1-4]_joint": 1e30,
+                "zarm_[lr][5-7]_joint": 1e30,
             },
             stiffness={
                 "zarm_[lr][1]_joint": 0.0,
@@ -98,8 +98,8 @@ KINOVA_ROBOTIQ = ArticulationCfg(
         ),
         "legs": ImplicitActuatorCfg(
             joint_names_expr=["leg_[lr][1-6]_joint"],
-            effort_limit=500.0,
-            velocity_limit=500,
+            effort_limit=1e30,
+            velocity_limit=1e30,
             stiffness={
                 "leg_[lr][1]_joint": 0.0,
                 "leg_[lr][2]_joint": 0.0,
@@ -119,8 +119,8 @@ KINOVA_ROBOTIQ = ArticulationCfg(
         ),
         "head": ImplicitActuatorCfg(
             joint_names_expr=["zhead_[1-2]_joint"],
-            effort_limit=200.0,
-            velocity_limit=10,
+            effort_limit=1e30,
+            velocity_limit=1e30,
             stiffness=300.0,
             damping=30.0,
         ),
