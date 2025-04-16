@@ -220,7 +220,6 @@ class KuavoRobotController():
         sensor_data.header.stamp = current_time
         sensor_data.header.frame_id = "world"  # 设置适当的frame_id
         sensor_data.sensor_time = current_time
-        print("current_time: ", current_time)
 
         # IMU数据
         sensor_data.imu_data.gyro.x = ang_vel_b[0]   # ang_vel
