@@ -51,6 +51,7 @@ DEBUG_FLAG = True
 
 rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
 
+FIRST_TIME_FLAG = True
 """
     ImuData(
     pos_w=tensor([[-0.0819, -0.0140,  0.4382]], device='cuda:0'), 
@@ -310,6 +311,7 @@ class BipedSceneCfg(InteractiveSceneCfg):
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kuavo_robot: KuavoRobotController):
     """Run the simulator."""
+    global FIRST_TIME_FLAG
     # 设置scene引用
     kuavo_robot.scene = scene
     
@@ -342,6 +344,30 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             rospy.sleep(1)
             rospy.loginfo("Waiting for simulation start signal...")
             continue
+        
+        # 更新传感器数据
+        if not FIRST_TIME_FLAG:
+            kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
+            joint_cmd = kuavo_robot.joint_cmd
+            if joint_cmd is not None:   
+                # 创建一个与机器人总关节数相同的零力矩数组
+                full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
+                # 将收到的力矩命令映射到对应的关节索引上
+                for i in range(len(kuavo_robot._leg_idx)//2):
+                    full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # 左腿
+                    full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # 右腿
+                    
+                for i in range(len(kuavo_robot._arm_idx)//2):
+                    full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # 左臂
+                    full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # 右臂
+
+                full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # head_l1_joint
+                full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # head_r1_joint
+
+                # 将力矩命令转换为tensor并发送给机器人
+                torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
+                scene["robot"].set_joint_effort_target(torque_tensor)
+                scene["robot"].write_data_to_sim()
 
         # write data to sim
         scene.write_data_to_sim()
@@ -352,7 +378,8 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         count += 1
         # update buffers
         scene.update(sim_dt)
-
+        # 第一帧结束
+        FIRST_TIME_FLAG = False
         # 获取IMU数据
         lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()[0]  # 线速度
         ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()[0]  # 角速度
@@ -385,54 +412,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             # print("applied_torque: ", applied_torque)
             # print("-------------------------------")
             pass
-
-        # 更新传感器数据
-        kuavo_robot.update_sensor_data(lin_vel_b, ang_vel_b, lin_acc_b, ang_acc_b, quat_w, joint_pos, joint_vel, applied_torque)
-
-        # # TODO: 更新MPC控制器
-        joint_cmd = kuavo_robot.joint_cmd
-        if joint_cmd is not None:   
-            # 创建一个与机器人总关节数相同的零力矩数组
-            full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
-            
-            # 将收到的力矩命令映射到对应的关节索引上
-            full_torque_cmd[kuavo_robot._leg_idx[0]] = joint_cmd.tau[0]  # leg_l1_joint
-            full_torque_cmd[kuavo_robot._leg_idx[2]] = joint_cmd.tau[1]  # leg_l2_joint
-            full_torque_cmd[kuavo_robot._leg_idx[4]] = joint_cmd.tau[2]  # leg_l3_joint
-            full_torque_cmd[kuavo_robot._leg_idx[6]] = joint_cmd.tau[3]  # leg_l4_joint
-            full_torque_cmd[kuavo_robot._leg_idx[8]] = joint_cmd.tau[4]  # leg_l5_joint
-            full_torque_cmd[kuavo_robot._leg_idx[10]] = joint_cmd.tau[5]  # leg_l6_joint
-            
-            full_torque_cmd[kuavo_robot._leg_idx[1]] = joint_cmd.tau[6]  # leg_r1_joint
-            full_torque_cmd[kuavo_robot._leg_idx[3]] = joint_cmd.tau[7]  # leg_r2_joint
-            full_torque_cmd[kuavo_robot._leg_idx[5]] = joint_cmd.tau[8]  # leg_r3_joint
-            full_torque_cmd[kuavo_robot._leg_idx[7]] = joint_cmd.tau[9]  # leg_r4_joint
-            full_torque_cmd[kuavo_robot._leg_idx[9]] = joint_cmd.tau[10]  # leg_r5_joint
-            full_torque_cmd[kuavo_robot._leg_idx[11]] = joint_cmd.tau[11]  # leg_r6_joint
-            
-            full_torque_cmd[kuavo_robot._arm_idx[0]] = joint_cmd.tau[12]  # zarm_l1_joint
-            full_torque_cmd[kuavo_robot._arm_idx[2]] = joint_cmd.tau[13]  # zarm_l2_joint
-            full_torque_cmd[kuavo_robot._arm_idx[4]] = joint_cmd.tau[14]  # zarm_l3_joint
-            full_torque_cmd[kuavo_robot._arm_idx[6]] = joint_cmd.tau[15]  # zarm_l4_joint
-            full_torque_cmd[kuavo_robot._arm_idx[8]] = joint_cmd.tau[16]  # zarm_l5_joint
-            full_torque_cmd[kuavo_robot._arm_idx[10]] = joint_cmd.tau[17]  # zarm_l6_joint
-            full_torque_cmd[kuavo_robot._arm_idx[12]] = joint_cmd.tau[18]  # zarm_l7_joint
-
-            full_torque_cmd[kuavo_robot._arm_idx[1]] = joint_cmd.tau[19]  # zarm_r1_joint
-            full_torque_cmd[kuavo_robot._arm_idx[3]] = joint_cmd.tau[20]  # zarm_r2_joint
-            full_torque_cmd[kuavo_robot._arm_idx[5]] = joint_cmd.tau[21]  # zarm_r3_joint
-            full_torque_cmd[kuavo_robot._arm_idx[7]] = joint_cmd.tau[22]  # zarm_r4_joint
-            full_torque_cmd[kuavo_robot._arm_idx[9]] = joint_cmd.tau[23]  # zarm_r5_joint
-            full_torque_cmd[kuavo_robot._arm_idx[11]] = joint_cmd.tau[24]  # zarm_r6_joint
-            full_torque_cmd[kuavo_robot._arm_idx[13]] = joint_cmd.tau[25]  # zarm_r7_joint
-            
-            full_torque_cmd[kuavo_robot._head_idx[0]] = joint_cmd.tau[26]  # head_l1_joint
-            full_torque_cmd[kuavo_robot._head_idx[1]] = joint_cmd.tau[27]  # head_r1_joint
-
-            # 将力矩命令转换为tensor并发送给机器人
-            torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
-            scene["robot"].set_joint_effort_target(torque_tensor)
-            scene["robot"].write_data_to_sim()
 
 def main():
     """Main function."""
