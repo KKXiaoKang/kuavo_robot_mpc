@@ -49,6 +49,7 @@ from kuavo_msgs.msg import sensorsData # /sensor_data_raw
 from std_srvs.srv import SetBool, SetBoolResponse  
 
 DEBUG_FLAG = True
+DECIMATION_RATE = 30
 
 rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
 
@@ -326,6 +327,8 @@ class BipedSceneCfg(InteractiveSceneCfg):
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kuavo_robot: KuavoRobotController):
     """Run the simulator."""
     global FIRST_TIME_FLAG
+    global DECIMATION_RATE
+
     # 设置scene引用
     kuavo_robot.scene = scene
     
@@ -494,7 +497,12 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         # write data to sim
         scene.write_data_to_sim()
         # perform step
-        sim.step()
+        if count % DECIMATION_RATE == 0:
+            # sim.step(True) # 步进带渲染
+            sim.render() # 仅渲染
+        else:
+            sim.step(False) # 物理步往前但是不渲染
+        
         # update sim-time
         sim_time += sim_dt
         count += 1
@@ -502,9 +510,6 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         scene.update(sim_dt)
         # 第一帧结束
         FIRST_TIME_FLAG = False
-        # 打印时间
-        # print("sim_time: ", sim_time)
-
 
 def main():
     """Main function."""
