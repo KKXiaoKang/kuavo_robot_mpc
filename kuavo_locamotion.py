@@ -228,7 +228,7 @@ class KuavoRobotController():
         sensor_data.imu_data.gyro.z = ang_vel_b[2]  # ang_vel
         sensor_data.imu_data.acc.x = lin_acc_b[0]  # lin_acc
         sensor_data.imu_data.acc.y = lin_acc_b[1]  # lin_acc
-        sensor_data.imu_data.acc.z = lin_acc_b[2] + 9.81  # lin_acc
+        sensor_data.imu_data.acc.z = lin_acc_b[2]  # lin_acc
 
         # sensor_data.imu_data.free_acc.x = lin_acc_b[0]  # lin_acc
         # sensor_data.imu_data.free_acc.y = lin_acc_b[1]  # lin_acc
@@ -319,10 +319,9 @@ class BipedSceneCfg(InteractiveSceneCfg):
     # 添加IMU传感器
     """
         固定的偏置为 +9.81 m/s^2
-        imu_RF = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/LF_FOOT", debug_vis=True) # 默认消除了重力
-        imu_LF = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/RF_FOOT", gravity_bias=(0, 0, 0), debug_vis=True) # 没有消除重力
     """
-    imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", gravity_bias=(0, 0, 0), debug_vis=True) # 没有消除重力
+    # imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", gravity_bias=(0, 0, 0), debug_vis=True) # 消除了重力
+    imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", debug_vis=True) # 没有消除重力
 
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kuavo_robot: KuavoRobotController):
     """Run the simulator."""
@@ -426,12 +425,12 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             base_link_ang_acc = body_acc_w[1][3:6] # [wax, way, waz]
 
             # target 
-            # target_ang_vel = ang_vel_b
-            # target_lin_acc = lin_acc_b
-            # target_quat_w = quat_w
-            target_ang_vel = base_link_ang_vel
-            target_lin_acc = base_link_lin_acc
-            target_quat_w = base_link_quat_w
+            target_ang_vel = ang_vel_b
+            target_lin_acc = lin_acc_b
+            target_quat_w = quat_w
+            # target_ang_vel = base_link_ang_vel
+            # target_lin_acc = base_link_lin_acc
+            # target_quat_w = base_link_quat_w
 
             kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, 
                                          joint_pos, joint_vel, applied_torque, joint_acc, sim_time)
