@@ -21,11 +21,41 @@ import isaaclab.sim as sim_utils
 from isaaclab.actuators import ImplicitActuatorCfg # 隐式执行器配置
 from isaaclab.assets import ArticulationCfg # 多连体配置
 import os
+import rospkg
+import rospy
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 usd_dir_path = os.path.join(BASE_DIR, "usd/")
-robot_usd = "biped_s45.usd"
-print(" usd_path : ", usd_dir_path + robot_usd)
+
+# 添加rospack获取USD文件路径
+def get_robot_usd_path(robot_version):
+    rospack = rospkg.RosPack()
+    try:
+        kuavo_assets_path = rospack.get_path('kuavo_assets')
+        usd_path = os.path.join(kuavo_assets_path, 
+                               f'models/biped_s{robot_version}/urdf/biped_s{robot_version}.usd')
+        if not os.path.exists(usd_path):
+            rospy.logwarn(f"USD file not found at {usd_path}, falling back to default path")
+            usd_path = os.path.join(usd_dir_path, f"biped_s{robot_version}.usd")
+    except rospkg.ResourceNotFound:
+        rospy.logwarn("kuavo_assets package not found, falling back to default path")
+        usd_path = os.path.join(usd_dir_path, f"biped_s{robot_version}.usd")
+    
+    return usd_path
+
+# 从ROS参数服务器获取机器人版本号
+try:    
+    # 获取机器人版本参数，如果未设置则默认为45
+    robot_version = rospy.get_param('isaac_robot_version', 45)
+    rospy.loginfo(f"Using robot version: {robot_version}")
+except Exception as e:
+    rospy.logwarn(f"Failed to get robot version from ROS param server: {e}")
+    robot_version = 45  # 默认版本
+    rospy.logwarn(f"Using default robot version: {robot_version}")
+
+# 使用函数获取USD文件路径
+robot_usd = get_robot_usd_path(robot_version)
+rospy.loginfo(f"Loading USD file from: {robot_usd}")
 
 ##
 # Configuration
@@ -54,7 +84,7 @@ HEAD_DAMPING = 3.0 if USE_TORQUE_CONTROL else 30.0
 
 KINOVA_ROBOTIQ = ArticulationCfg(
     spawn=sim_utils.UsdFileCfg(
-        usd_path=usd_dir_path + robot_usd,
+        usd_path=robot_usd,
         rigid_props=sim_utils.RigidBodyPropertiesCfg(
             disable_gravity=False,
             max_depenetration_velocity=5.0,

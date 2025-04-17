@@ -49,7 +49,7 @@ from kuavo_msgs.msg import sensorsData # /sensor_data_raw
 from std_srvs.srv import SetBool, SetBoolResponse  
 
 DEBUG_FLAG = True
-DECIMATION_RATE = 30
+DECIMATION_RATE = 50
 
 rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
 
