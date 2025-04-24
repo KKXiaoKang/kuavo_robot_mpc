@@ -16,6 +16,9 @@ This script demonstrates how to load and simulate a biped robot in IsaacLab.
 
 import argparse
 from isaaclab.app import AppLauncher
+import rospkg
+import os
+import time  # 添加time模块用于性能分析
 
 # add argparse arguments
 parser = argparse.ArgumentParser(description="Demo for loading biped robot.")
@@ -49,7 +52,7 @@ from kuavo_msgs.msg import sensorsData # /sensor_data_raw
 from std_srvs.srv import SetBool, SetBoolResponse  
 
 DEBUG_FLAG = True
-DECIMATION_RATE = 50
+DECIMATION_RATE = 100
 
 rospy.init_node('isaac_lab_kuavo_robot_mpc', anonymous=True) # 随机后缀
 
@@ -104,7 +107,11 @@ FIRST_TIME_FLAG = True
 """
 
 import json
-import os
+
+# 获取包路径
+rospack = rospkg.RosPack()
+ISAAC_SIM_PATH = rospack.get_path('isaac_sim')
+ASSETS_PATH = os.path.join(ISAAC_SIM_PATH, 'Assets')
 
 class KuavoRobotController():
     """
@@ -323,6 +330,41 @@ class BipedSceneCfg(InteractiveSceneCfg):
     # imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", gravity_bias=(0, 0, 0), debug_vis=True) # 消除了重力
     imu_base = ImuCfg(prim_path="{ENV_REGEX_NS}/Robot/base_link", debug_vis=True) # 没有消除重力
 
+    # 添加箱子配置
+    box_origin = AssetBaseCfg(
+        prim_path="/World/box_origin",  # 场景中箱子的路径
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(ASSETS_PATH, "box/container_b10/container_b10_inst_base.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False,
+                rigid_body_enabled=True,
+                kinematic_enabled=False,
+                max_depenetration_velocity=5.0,
+            ),
+        ),
+        init_state=AssetBaseCfg.InitialStateCfg(
+            pos=(0.5, 0.0, 0.8),  # 设置箱子的初始位置 (x, y, z)
+            rot=(1.0, 0.0, 0.0, 0.0),  # 设置箱子的初始旋转 (w, x, y, z)
+        )
+    )
+
+    box_target = AssetBaseCfg(
+        prim_path="/World/box_target",  # 场景中箱子的路径
+        spawn=sim_utils.UsdFileCfg(
+            usd_path=os.path.join(ASSETS_PATH, "box/container_b10/container_b10_inst_base_cube.usd"),
+            rigid_props=sim_utils.RigidBodyPropertiesCfg(
+                disable_gravity=False,
+                rigid_body_enabled=True,
+                kinematic_enabled=False,
+                max_depenetration_velocity=5.0,
+            ),
+        ),
+        init_state=AssetBaseCfg.InitialStateCfg(
+            pos=(-0.5, 0.0, 0.8),  # 设置箱子的初始位置 (x, y, z)
+            rot=(1.0, 0.0, 0.0, 0.0),  # 设置箱子的初始旋转 (w, x, y, z)
+        )
+    )
+
 def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kuavo_robot: KuavoRobotController):
     """Run the simulator."""
     global FIRST_TIME_FLAG
@@ -336,6 +378,18 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
     print("sim_dt: ", sim_dt)
     sim_time = 0.0
     count = 0
+
+    # 性能监控变量
+    perf_stats = {
+        "loop_total": 0.0,
+        "sensor_update": 0.0,
+        "cmd_processing": 0.0,
+        "write_to_sim": 0.0,
+        "sim_step": 0.0,
+        "scene_update": 0.0,
+        "samples": 0
+    }
+    perf_report_interval = 100  # 每100帧报告一次性能数据
 
     body_names = scene["robot"].data.body_names   # 包含所有fix固定的joint
     joint_names = scene["robot"].data.joint_names # 只包含可活动的joint
@@ -364,36 +418,17 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
         
     # Simulate physics
     while simulation_app.is_running():
+        loop_start = time.time()
+        
         if not kuavo_robot.sim_running:
             rospy.sleep(1)
             rospy.loginfo("Waiting for simulation start signal...")
             continue
 
-        # # Reset -- 重置
-        # if count % 500 == 0:
-        #     # reset counter
-        #     count = 0
-        #     # reset the scene entities
-        #     # root state
-        #     # we offset the root state by the origin since the states are written in simulation world frame
-        #     # if this is not done, then the robots will be spawned at the (0, 0, 0) of the simulation world
-        #     root_state = scene["robot"].data.default_root_state.clone()
-        #     root_state[:, :3] += scene.env_origins
-        #     scene["robot"].write_root_pose_to_sim(root_state[:, :7])
-        #     scene["robot"].write_root_velocity_to_sim(root_state[:, 7:])
-        #     # set joint positions with some noise
-        #     joint_pos, joint_vel = (
-        #         scene["robot"].data.default_joint_pos.clone(),
-        #         scene["robot"].data.default_joint_vel.clone(),
-        #     )
-        #     joint_pos += torch.rand_like(joint_pos) * 0.1
-        #     scene["robot"].write_joint_state_to_sim(joint_pos, joint_vel)
-        #     # clear internal buffers
-        #     scene.reset()
-        #     print("[INFO]: Resetting robot state...")
-
         # 更新传感器数据
         if not FIRST_TIME_FLAG:
+            sensor_start = time.time()
+            
             # 获取IMU数据
             lin_vel_b = scene["imu_base"].data.lin_vel_b.tolist()[0]  # 线速度
             ang_vel_b = scene["imu_base"].data.ang_vel_b.tolist()[0]  # 角速度
@@ -428,29 +463,19 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
             target_ang_vel = ang_vel_b
             target_lin_acc = lin_acc_b
             target_quat_w = quat_w
-            # target_ang_vel = base_link_ang_vel
-            # target_lin_acc = base_link_lin_acc
-            # target_quat_w = base_link_quat_w
 
             kuavo_robot.update_sensor_data(target_ang_vel, target_lin_acc, target_quat_w, 
                                          joint_pos, joint_vel, applied_torque, joint_acc, sim_time)
+            
+            sensor_end = time.time()
+            perf_stats["sensor_update"] += sensor_end - sensor_start
 
+            cmd_start = time.time()
             joint_cmd = kuavo_robot.joint_cmd
-            if joint_cmd is None:
-                continue
-            else:   
+            if joint_cmd is not None:
                 # 创建一个与机器人总关节数相同的零力矩数组
                 full_torque_cmd = [0.0] * len(scene["robot"].data.joint_names)
-                # # 将收到的力矩命令映射到对应的关节索引上
-                # for i in range((len(kuavo_robot._leg_idx)//2)): # type: ignore
-                #     full_torque_cmd[kuavo_robot._leg_idx[2*i]] = joint_cmd.tau[i]  # type: ignore # 左腿
-                #     full_torque_cmd[kuavo_robot._leg_idx[2*i+1]] = joint_cmd.tau[i+6]  # type: ignore # 右腿
-
-                # # 手部                    
-                # for i in range((len(kuavo_robot._arm_idx)//2)): # type: ignore
-                #     full_torque_cmd[kuavo_robot._arm_idx[2*i]] = joint_cmd.tau[12+i]  # type: ignore # 左臂
-                #     full_torque_cmd[kuavo_robot._arm_idx[2*i+1]] = joint_cmd.tau[19+i]  # type: ignore # 右臂
-
+                
                 # 左腿
                 full_torque_cmd[kuavo_robot._leg_idx[0]] = joint_cmd.tau[0]  # type: ignore # 左腿
                 full_torque_cmd[kuavo_robot._leg_idx[2]] = joint_cmd.tau[1]  # type: ignore # 左腿
@@ -492,21 +517,67 @@ def run_simulator(sim: sim_utils.SimulationContext, scene: InteractiveScene, kua
                 # 将力矩命令转换为tensor并发送给机器人
                 torque_tensor = torch.tensor([full_torque_cmd], device=scene["robot"].device)
                 scene["robot"].set_joint_effort_target(torque_tensor)
+            
+            cmd_end = time.time()
+            perf_stats["cmd_processing"] += cmd_end - cmd_start
 
         # write data to sim
+        write_start = time.time()
         scene.write_data_to_sim()
+        write_end = time.time()
+        perf_stats["write_to_sim"] += write_end - write_start
+        
         # perform step
+        step_start = time.time()
         if count % DECIMATION_RATE == 0:
             # sim.step(True) # 步进带渲染
-            sim.render() # 仅渲染
+            # sim.render() # 仅渲染
+            pass
         else:
             sim.step(False) # 物理步往前但是不渲染
+        step_end = time.time()
+        perf_stats["sim_step"] += step_end - step_start
         
         # update sim-time
         sim_time += sim_dt
         count += 1
+        
         # update buffers
+        update_start = time.time()
         scene.update(sim_dt)
+        update_end = time.time()
+        perf_stats["scene_update"] += update_end - update_start
+        
+        # 计算总循环耗时
+        loop_end = time.time()
+        perf_stats["loop_total"] += loop_end - loop_start
+        perf_stats["samples"] += 1
+        
+        # 定期打印性能统计信息
+        if perf_stats["samples"] >= perf_report_interval:
+            avg_loop = perf_stats["loop_total"] / perf_stats["samples"] * 1000
+            avg_sensor = perf_stats["sensor_update"] / perf_stats["samples"] * 1000
+            avg_cmd = perf_stats["cmd_processing"] / perf_stats["samples"] * 1000
+            avg_write = perf_stats["write_to_sim"] / perf_stats["samples"] * 1000
+            avg_step = perf_stats["sim_step"] / perf_stats["samples"] * 1000
+            avg_update = perf_stats["scene_update"] / perf_stats["samples"] * 1000
+            
+            fps = 1.0 / (perf_stats["loop_total"] / perf_stats["samples"])
+            
+            print("\n===== 性能统计 (平均耗时 ms) =====")
+            print(f"总循环: {avg_loop:.2f} ms (FPS: {fps:.1f})")
+            print(f"传感器更新: {avg_sensor:.2f} ms ({avg_sensor/avg_loop*100:.1f}%)")
+            print(f"命令处理: {avg_cmd:.2f} ms ({avg_cmd/avg_loop*100:.1f}%)")
+            print(f"数据写入: {avg_write:.2f} ms ({avg_write/avg_loop*100:.1f}%)")
+            print(f"仿真步进: {avg_step:.2f} ms ({avg_step/avg_loop*100:.1f}%)")
+            print(f"场景更新: {avg_update:.2f} ms ({avg_update/avg_loop*100:.1f}%)")
+            print("==================================\n")
+            
+            # 重置统计信息
+            for key in perf_stats:
+                perf_stats[key] = 0.0
+            perf_stats["samples"] = 0
+        
         # 第一帧结束
         FIRST_TIME_FLAG = False
 
